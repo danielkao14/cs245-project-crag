@@ -29,7 +29,7 @@ class RAGModel:
     """
     def __init__(
         self, 
-        llm_name="meta-llama/Llama-3-8B-instruct", # Llama-3.2-3B-Instruct
+        llm_name="meta-llama/Meta-Llama-3-8B-Instruct", # Llama-3.2-3B-Instruct
         is_server=False, 
         vllm_server=None
     ):

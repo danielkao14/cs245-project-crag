@@ -89,6 +89,7 @@ if __name__ == "__main__":
                         choices=["meta-llama/Llama-3.2-3B-Instruct",
                                  "google/gemma-2-2b-it",
                                  # can add more llm models here
+                                 "meta-llama/Meta-Llama-3-8B-Instruct",
                                  ])
     parser.add_argument("--is_server", action="store_true", default=False,
                         help="Whether we use vLLM deployed on a server or offline inference.")
