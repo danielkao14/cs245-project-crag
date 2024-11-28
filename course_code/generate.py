@@ -94,7 +94,8 @@ if __name__ == "__main__":
                         choices=["vanilla_baseline",
                                  "rag_baseline",
                                  # add your model here
-                                 "my_model"
+                                 "my_model",
+                                 "my_model_v1"
                                  ],
                         )
 
@@ -133,6 +134,9 @@ if __name__ == "__main__":
         model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
     elif model_name == "my_model":
         from my_model import RAGModel
+        model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
+    elif model_name == "my_model_v1":
+        from my_model_v1 import RAGModel
         model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
     else:
         raise ValueError("Model name not recognized.")

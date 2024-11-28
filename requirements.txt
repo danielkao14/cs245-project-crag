@@ -13,3 +13,6 @@ transformers
 vllm>=0.4.2
 jupyterlab
 ipywidgets
+langchain
+langchain-community
+chromadb

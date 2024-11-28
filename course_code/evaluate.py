@@ -80,7 +80,8 @@ if __name__ == "__main__":
                         choices=["vanilla_baseline",
                                  "rag_baseline",
                                  # add your model here
-                                 "my_model"
+                                 "my_model",
+                                 "my_model_v1"
                                  ],
                         )
 
