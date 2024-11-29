@@ -84,6 +84,11 @@ class Retriever:
 
     # return list string of retrieved docs
     def get_documents(self, query, search_results, k):
+        """
+        query: string 
+        search_results: List[Dict] -> list holds 5 search query results
+        k: int -> gets top k results
+        """
         # clean out search results
         search_results = self.clean_search_results(search_results)
         # get relevant documents based on query embeddings + parent/child embeds lez go
@@ -262,6 +267,9 @@ class RAGModel:
         query_times = batch["query_time"]
 
         # Retrieve top matches for the whole batch
+        # ATTENTION: CHANGES HERE
+        #
+        #
         batch_retrieval_results = []
         for _idx, interaction_id in enumerate(batch_interaction_ids):
             query = queries[_idx]
@@ -272,7 +280,10 @@ class RAGModel:
             retrieval_results = self.retriever.get_documents(query, search_results, k)
             # ATTENTION: retrieval results is a list of strings, idk if this is right format
             batch_retrieval_results.append(retrieval_results)
-            
+        # 
+        # 
+        # 
+        
         # Prepare formatted prompts from the LLM        
         formatted_prompts = self.format_prompts(queries, query_times, batch_retrieval_results)
 
