@@ -7,6 +7,9 @@ import numpy as np
 import ray
 import torch
 import vllm
+import json
+
+# ATTENTION: pip install bz2, json, langchain, langchain_community
 from blingfire import text_to_sentences_and_offsets
 from bs4 import BeautifulSoup
 from transformers import  GenerationConfig
@@ -21,7 +24,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from chromadb.utils.embedding_functions import create_langchain_embedding
 from langchain_core.documents import Document
-
 
 
 
@@ -65,141 +67,31 @@ class Retriever:
         res = []
         for html_page_json in search_results:
             soup = BeautifulSoup(json.dumps(html_page_json["page_result"]), "html.parser")
-
+            # clean out CSS/style elements
             for script in soup(["script", "style"]):
-                script.extract()    # rip it out
+                script.extract()
 
             text = soup.get_text(separator=' ')
+            # clean lines
             lines = (line.strip() for line in text.splitlines())
             # break multi-headlines into a line each
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             # drop blank lines
             text = ' '.join(chunk for chunk in chunks if chunk)
+            # create document for each HTML text
             res.append(Document(page_content=text, metadata={}))
         self.retriever.add_documents(res)
 
     # return list string of retrieved docs
     def get_documents(self, query, search_results, k):
+        # clean out search results
         search_results = self.clean_search_results(search_results)
+        # get relevant documents based on query embeddings + parent/child embeds lez go
         retrieved_docs = self.retriever.get_relevant_documents(query)
-        return [x.page_content for x in retrieved_docs]
+        if k > len(retrieved_docs):
+            k = len(retrieved_docs) - 1
+        return [x.page_content for x in retrieved_docs[:k+1]]
     
-class ChunkExtractor:
-    
-    def __init__(self):
-        self.used1 = self.used2 = "cuda:0"
-        
-        # Initialize the retriever
-    
-        self.parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
-        self.child_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
-
-        self.embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
-        self.vector_store = Chroma(embedding_function = self.embeddings)
-        self.docstore = InMemoryStore()
-        self.retriever = ParentDocumentRetriever(vectorstore = self.vector_store,
-                                                  docstore = self.docstore, 
-                                                  child_splitter=self.child_splitter, 
-                                                  parent_splitter = self.parent_splitter)
-
-    @ray.remote
-    def _extract_chunks(self, interaction_id, html_source):
-        """
-        Extracts and returns chunks from given HTML source.
-
-        Note: This function is for demonstration purposes only.
-        We are treating an independent sentence as a chunk here,
-        but you could choose to chunk your text more cleverly than this.
-
-        Parameters:
-            interaction_id (str): Interaction ID that this HTML source belongs to.
-            html_source (str): HTML content from which to extract text.
-
-        Returns:
-            Tuple[str, List[str]]: A tuple containing the interaction ID and a list of sentences extracted from the HTML content.
-        """
-        # Parse the HTML content using BeautifulSoup
-        soup = BeautifulSoup(html_source, "lxml")
-        text = soup.get_text(" ", strip=True)  # Use space as a separator, strip whitespaces
-
-        
-        if not text:
-            # Return a list with empty string when no text is extracted
-            return interaction_id, [""]
-
-        # Extract offsets of sentences from the text
-        _, offsets = text_to_sentences_and_offsets(text)
-
-        # Initialize a list to store sentences
-        chunks = []
-
-        # Iterate through the list of offsets and extract sentences
-        for start, end in offsets:
-            # Extract the sentence and limit its length
-            sentence = text[start:end][:MAX_CONTEXT_SENTENCE_LENGTH]
-            chunks.append(sentence)
-
-        return interaction_id, chunks
-    
-    def extract_chunks(self, batch_interaction_ids, batch_search_results):
-        """
-        Extracts chunks from given batch search results using parallel processing with Ray.
-
-        Parameters:
-            batch_interaction_ids (List[str]): List of interaction IDs.
-            batch_search_results (List[List[Dict]]): List of search results batches, each containing HTML text.
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: A tuple containing an array of chunks and an array of corresponding interaction IDs.
-        """
-        # Setup parallel chunk extraction using ray remote
-        ray_response_refs = [
-            self._extract_chunks.remote(
-                self,
-                interaction_id=batch_interaction_ids[idx],
-                html_source=html_text["page_result"]
-            )
-            for idx, search_results in enumerate(batch_search_results)
-            for html_text in search_results
-        ]
-
-        # Wait until all sentence extractions are complete
-        # and collect chunks for every interaction_id separately
-        chunk_dictionary = defaultdict(list)
-
-        for response_ref in ray_response_refs:
-            interaction_id, _chunks = ray.get(response_ref)  # Blocking call until parallel execution is complete
-            chunk_dictionary[interaction_id].extend(_chunks)
-
-        # Flatten chunks and keep a map of corresponding interaction_ids
-        chunks, chunk_interaction_ids = self._flatten_chunks(chunk_dictionary)
-
-        return chunks, chunk_interaction_ids
-
-    def _flatten_chunks(self, chunk_dictionary):
-        """
-        Flattens the chunk dictionary into separate lists for chunks and their corresponding interaction IDs.
-
-        Parameters:
-            chunk_dictionary (defaultdict): Dictionary with interaction IDs as keys and lists of chunks as values.
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: A tuple containing an array of chunks and an array of corresponding interaction IDs.
-        """
-        chunks = []
-        chunk_interaction_ids = []
-
-        for interaction_id, _chunks in chunk_dictionary.items():
-            # De-duplicate chunks within the scope of an interaction ID
-            unique_chunks = list(set(_chunks))
-            chunks.extend(unique_chunks)
-            chunk_interaction_ids.extend([interaction_id] * len(unique_chunks))
-
-        # Convert to numpy arrays for convenient slicing/masking operations later
-        chunks = np.array(chunks)
-        chunk_interaction_ids = np.array(chunk_interaction_ids)
-
-        return chunks, chunk_interaction_ids
 
 class RAGModel:
     """
@@ -208,7 +100,7 @@ class RAGModel:
     """
     def __init__(self, llm_name="meta-llama/Llama-3.2-3B-Instruct", is_server=False, vllm_server=None):
         self.initialize_models(llm_name, is_server, vllm_server)
-        self.chunk_extractor = ChunkExtractor()
+        self.retriever = Retriever()
 
     def initialize_models(self, llm_name, is_server, vllm_server):
         self.llm_name = llm_name
@@ -369,41 +261,16 @@ class RAGModel:
         batch_search_results = batch["search_results"]
         query_times = batch["query_time"]
 
-        # Chunk all search results using ChunkExtractor
-        chunks, chunk_interaction_ids = self.chunk_extractor.extract_chunks(
-            batch_interaction_ids, batch_search_results
-        )
-
-        # Calculate all chunk embeddings
-        chunk_embeddings = self.calculate_embeddings(chunks)
-
-        # Calculate embeddings for queries
-        query_embeddings = self.calculate_embeddings(queries)
-
         # Retrieve top matches for the whole batch
         batch_retrieval_results = []
         for _idx, interaction_id in enumerate(batch_interaction_ids):
             query = queries[_idx]
             query_time = query_times[_idx]
-            query_embedding = query_embeddings[_idx]
-
-            # Identify chunks that belong to this interaction_id
-            relevant_chunks_mask = chunk_interaction_ids == interaction_id
-
-            # Filter out the said chunks and corresponding embeddings
-            relevant_chunks = chunks[relevant_chunks_mask]
-            relevant_chunks_embeddings = chunk_embeddings[relevant_chunks_mask]
-
-            # Calculate cosine similarity between query and chunk embeddings,
-            cosine_scores = (relevant_chunks_embeddings * query_embedding).sum(1)
-
-            # and retrieve top-N results.
-            retrieval_results = relevant_chunks[
-                (-cosine_scores).argsort()[:NUM_CONTEXT_SENTENCES]
-            ]
-            
-            # You might also choose to skip the steps above and 
-            # use a vectorDB directly.
+            search_results = batch_search_results[_idx]
+            # use chroma vector DB to get automatic top k results for eqch query
+            k = 4
+            retrieval_results = self.retriever.get_documents(query, search_results, k)
+            # ATTENTION: retrieval results is a list of strings, idk if this is right format
             batch_retrieval_results.append(retrieval_results)
             
         # Prepare formatted prompts from the LLM        

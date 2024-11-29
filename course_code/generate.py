@@ -95,7 +95,8 @@ if __name__ == "__main__":
                                  "rag_baseline",
                                  # add your model here
                                  "my_model",
-                                 "my_model_v1"
+                                 "my_model_v1",
+                                 "my_model_v2"
                                  ],
                         )
 
