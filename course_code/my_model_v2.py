@@ -20,6 +20,8 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from chromadb.utils.embedding_functions import create_langchain_embedding
+from langchain_core.documents import Document
+
 
 
 
@@ -44,6 +46,44 @@ SENTENTENCE_TRANSFORMER_BATCH_SIZE = 32 # TUNE THIS VARIABLE depending on the si
 
 #### CONFIG PARAMETERS END---
 
+class Retriever:
+    def __init__(self):
+        self.parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
+        self.child_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
+
+        self.embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+        self.vector_store = Chroma(embedding_function = self.embeddings)
+        self.docstore = InMemoryStore()
+        self.retriever = ParentDocumentRetriever(vectorstore = self.vector_store,
+                                                  docstore = self.docstore, 
+                                                  child_splitter=self.child_splitter, 
+                                                  parent_splitter = self.parent_splitter)
+    def clean_search_results(self, search_results):
+        """
+        search_results: List[Dict]
+        """
+        res = []
+        for html_page_json in search_results:
+            soup = BeautifulSoup(json.dumps(html_page_json["page_result"]), "html.parser")
+
+            for script in soup(["script", "style"]):
+                script.extract()    # rip it out
+
+            text = soup.get_text(separator=' ')
+            lines = (line.strip() for line in text.splitlines())
+            # break multi-headlines into a line each
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            # drop blank lines
+            text = ' '.join(chunk for chunk in chunks if chunk)
+            res.append(Document(page_content=text, metadata={}))
+        self.retriever.add_documents(res)
+
+    # return list string of retrieved docs
+    def get_documents(self, query, search_results, k):
+        search_results = self.clean_search_results(search_results)
+        retrieved_docs = self.retriever.get_relevant_documents(query)
+        return [x.page_content for x in retrieved_docs]
+    
 class ChunkExtractor:
     
     def __init__(self):
