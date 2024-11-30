@@ -110,6 +110,9 @@ if __name__ == "__main__":
                         help="Whether we use vLLM deployed on a server or offline inference.")
     parser.add_argument("--vllm_server", type=str, default="http://localhost:8088/v1",
                         help="URL of the vLLM server if is_server is True. The port number may vary.")
+    parser.add_argument("--k", type=int, default=4,
+                        help="Number of retrieved documents when using ParentDocumentRetriever")
+
 
     args = parser.parse_args()
     print(args.is_server)
@@ -140,11 +143,16 @@ if __name__ == "__main__":
     elif model_name == "my_model_v1":
         from my_model_v1 import RAGModel
         model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
+    elif model_name == "my_model_v2":
+        from my_model_v2 import RAGModel
+        model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server, k=args.k)
     else:
         raise ValueError("Model name not recognized.")
 
     # make output directory
     output_directory = os.path.join("..", "output", dataset, model_name, _llm_name)
+    if model_name == "my_model_v2":
+        output_directory = os.path.join(output_directory, f"k={args.k}")
     os.makedirs(output_directory, exist_ok=True)
 
     # Generate predictions

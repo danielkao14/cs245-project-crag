@@ -18,10 +18,10 @@ from openai import OpenAI
 from tqdm import tqdm
 from langchain.retrievers import ParentDocumentRetriever
 from langchain.storage import InMemoryStore
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from chromadb.utils.embedding_functions import create_langchain_embedding
 from langchain_core.documents import Document
 
@@ -103,9 +103,10 @@ class RAGModel:
     An example RAGModel for the KDDCup 2024 Meta CRAG Challenge
     which includes all the key components of a RAG lifecycle.
     """
-    def __init__(self, llm_name="meta-llama/Llama-3.2-3B-Instruct", is_server=False, vllm_server=None):
+    def __init__(self, llm_name="meta-llama/Llama-3.2-3B-Instruct", is_server=False, vllm_server=None, k=4):
         self.initialize_models(llm_name, is_server, vllm_server)
         self.retriever = Retriever()
+        self.k = k
 
     def initialize_models(self, llm_name, is_server, vllm_server):
         self.llm_name = llm_name
@@ -276,8 +277,7 @@ class RAGModel:
             query_time = query_times[_idx]
             search_results = batch_search_results[_idx]
             # use chroma vector DB to get automatic top k results for eqch query
-            k = 4
-            retrieval_results = self.retriever.get_documents(query, search_results, k)
+            retrieval_results = self.retriever.get_documents(query, search_results, self.k)
             # ATTENTION: retrieval results is a list of strings, idk if this is right format
             batch_retrieval_results.append(retrieval_results)
         # 

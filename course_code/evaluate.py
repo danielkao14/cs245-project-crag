@@ -98,6 +98,8 @@ if __name__ == "__main__":
                         help="URL of the vLLM server if is_server is True. The port number may vary.")
     parser.add_argument("--max_retries", type=int, default=10,
                         help="Number of retries for evaluation per query.")
+    parser.add_argument("--k", type=int, default=4,
+                        help="Number of retrieved documents when using ParentDocumentRetriever")
 
 
     args = parser.parse_args()
@@ -119,6 +121,8 @@ if __name__ == "__main__":
     # get output directory
     model_name = args.model_name
     output_directory = os.path.join("..", "output", dataset, model_name, _llm_name)
+    if model_name == "my_model_v2":
+        output_directory = os.path.join(output_directory, f"k={args.k}")
     if not os.path.exists(output_directory):
         raise FileNotFoundError(f"Output directory {output_directory} does not exist.")
 
