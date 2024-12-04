@@ -96,16 +96,12 @@ if __name__ == "__main__":
                                  # add your model here
                                  "my_model",
                                  "my_model_v1",
-                                 "my_model_v2"
+                                 "my_model_v2",
+                                 "my_model_v3",
                                  ],
                         )
 
-    parser.add_argument("--llm_name", type=str, default="meta-llama/Llama-3.2-3B-Instruct",
-                        choices=["meta-llama/Llama-3.2-3B-Instruct",
-                                 "google/gemma-2-2b-it",
-                                 # can add more llm models here
-                                 "meta-llama/Meta-Llama-3-8B-Instruct",
-                                 ])
+    parser.add_argument("--llm_name", type=str, default="meta-llama/Llama-3.2-3B-Instruct")
     parser.add_argument("--is_server", action="store_true", default=False,
                         help="Whether we use vLLM deployed on a server or offline inference.")
     parser.add_argument("--vllm_server", type=str, default="http://localhost:8088/v1",
@@ -146,12 +142,15 @@ if __name__ == "__main__":
     elif model_name == "my_model_v2":
         from my_model_v2 import RAGModel
         model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server, k=args.k)
+    elif model_name == "my_model_v3":
+        from my_model_v3 import RAGModel
+        model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server, k=args.k)
     else:
         raise ValueError("Model name not recognized.")
 
     # make output directory
     output_directory = os.path.join("..", "output", dataset, model_name, _llm_name)
-    if model_name == "my_model_v2":
+    if "my_model_v" in model_name:
         output_directory = os.path.join(output_directory, f"k={args.k}")
     os.makedirs(output_directory, exist_ok=True)
 

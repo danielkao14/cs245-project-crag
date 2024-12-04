@@ -82,11 +82,13 @@ if __name__ == "__main__":
                                  # add your model here
                                  "my_model",
                                  "my_model_v1",
-                                 "my_model_v2"
+                                 "my_model_v2",
+                                 "my_model_v3",
                                  ],
                         )
 
-    parser.add_argument("--llm_name", type=str, default="meta-llama/Llama-3.2-3B-Instruct",
+    parser.add_argument("--llm_name", type=str, default="meta-llama/Llama-3.2-3B-Instruct")
+    parser.add_argument("--eval_llm_name", type=str, default="meta-llama/Llama-3.2-3B-Instruct",
                         choices=["meta-llama/Llama-3.2-3B-Instruct",
                                  "google/gemma-2-2b-it",
                                  # can add more llm models here
@@ -109,19 +111,21 @@ if __name__ == "__main__":
     dataset = dataset_path.split("/")[0]
     dataset_path = os.path.join("..", dataset_path)
 
-    llm_name = args.llm_name
-    _llm_name = llm_name.split("/")[-1]
+    _llm_name = args.llm_name.split("/")[-1]
 
     # init evaluation model
     from evaluation_model import EvaluationModel
-    eval_model = EvaluationModel(llm_name=llm_name, is_server=args.is_server,
-                                 vllm_server=args.vllm_server, max_retries=args.max_retries)
+    eval_model = EvaluationModel(
+        llm_name=args.eval_llm_name, 
+        is_server=args.is_server,
+        vllm_server=args.vllm_server, 
+        max_retries=args.max_retries)
 
 
     # get output directory
     model_name = args.model_name
     output_directory = os.path.join("..", "output", dataset, model_name, _llm_name)
-    if model_name == "my_model_v2":
+    if "my_model_v" in model_name:
         output_directory = os.path.join(output_directory, f"k={args.k}")
     if not os.path.exists(output_directory):
         raise FileNotFoundError(f"Output directory {output_directory} does not exist.")
