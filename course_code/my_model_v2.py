@@ -50,7 +50,7 @@ SENTENTENCE_TRANSFORMER_BATCH_SIZE = 32 # TUNE THIS VARIABLE depending on the si
 
 class Retriever:
     def __init__(self):
-        self.parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
+        self.parent_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=150)
         self.child_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
 
         self.embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
