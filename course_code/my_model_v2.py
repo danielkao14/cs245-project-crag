@@ -66,19 +66,8 @@ class Retriever:
         """
         res = []
         for html_page_json in search_results:
-            soup = BeautifulSoup(json.dumps(html_page_json["page_result"]), "html.parser")
-            # clean out CSS/style elements
-            for script in soup(["script", "style"]):
-                script.extract()
-
-            text = soup.get_text(separator=' ')
-            # clean lines
-            lines = (line.strip() for line in text.splitlines())
-            # break multi-headlines into a line each
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            # drop blank lines
-            text = ' '.join(chunk for chunk in chunks if chunk)
-            # create document for each HTML text
+            soup = BeautifulSoup(html_page_json["page_result"], "lxml")
+            text = soup.get_text(" ", strip=True)  # Use space as a separator, strip whitespaces
             res.append(Document(page_content=text, metadata={}))
         self.retriever.add_documents(res)
 
@@ -92,10 +81,10 @@ class Retriever:
         # clean out search results
         search_results = self.clean_search_results(search_results)
         # get relevant documents based on query embeddings + parent/child embeds lez go
-        retrieved_docs = self.retriever.get_relevant_documents(query)
+        retrieved_docs = self.retriever.invoke(query)
         if k > len(retrieved_docs):
-            k = len(retrieved_docs) - 1
-        return [x.page_content for x in retrieved_docs[:k+1]]
+            k = len(retrieved_docs)
+        return [x.page_content for x in retrieved_docs[:k]]
     
 
 class RAGModel:
