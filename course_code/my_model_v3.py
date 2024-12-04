@@ -1,38 +1,28 @@
 import os
 import time
+import json
 from collections import defaultdict
 from typing import Any, Dict, List
 
 import numpy as np
 import ray
+from transformers import AutoTokenizer
 import torch
 import vllm
-import json
-
-# ATTENTION: pip install bz2, json, langchain, langchain_community
-from blingfire import text_to_sentences_and_offsets
 from bs4 import BeautifulSoup
 from transformers import  GenerationConfig
-from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 from tqdm import tqdm
 from langchain.retrievers import ParentDocumentRetriever
 from langchain.storage import InMemoryStore
 from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from chromadb.utils.embedding_functions import create_langchain_embedding
 from langchain_core.documents import Document
-
+from FlagEmbedding import FlagReranker
 
 
 #### CONFIG PARAMETERS ---
-
-# Define the number of context sentences to consider for generating an answer.
-NUM_CONTEXT_SENTENCES = 20
-# Set the maximum length for each context sentence (in characters).
-MAX_CONTEXT_SENTENCE_LENGTH = 1000
 # Set the maximum context references length (in characters).
 MAX_CONTEXT_REFERENCES_LENGTH = 4000
 
@@ -43,48 +33,119 @@ AICROWD_SUBMISSION_BATCH_SIZE = 1 # TUNE THIS VARIABLE depending on the number o
 VLLM_TENSOR_PARALLEL_SIZE = 1 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 VLLM_GPU_MEMORY_UTILIZATION = 0.85 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 
-# Sentence Transformer Parameters
-SENTENTENCE_TRANSFORMER_BATCH_SIZE = 32 # TUNE THIS VARIABLE depending on the size of your embedding model and GPU mem available
-
 #### CONFIG PARAMETERS END---
 
 class Retriever:
-    def __init__(self):
-        self.parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
-        self.child_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
+    def __init__(
+        self,
+        token_path,
+        parent_chunk_size=700,
+        parent_chunk_overlap=150,
+        child_chunk_size=200,
+        child_chunk_overlap=50,
+        embed_path="BAAI/bge-base-en-v1.5",
+        rerank_path='BAAI/bge-reranker-v2-m3',
+        batch_size=64,
+        recall_k=50
+    ):
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+        self.parent_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=parent_chunk_size,
+            chunk_overlap=parent_chunk_overlap,
+            separators=' '
+        )
+        self.child_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=child_chunk_size,
+            chunk_overlap=child_chunk_overlap,
+            separators=' '
+        )
 
-        self.embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
-        self.vector_store = Chroma(embedding_function = self.embeddings)
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name=embed_path,
+            model_kwargs={"device": self.device},
+            encode_kwargs={
+                'batch_size': batch_size,
+                'normalize_embeddings': True
+            }
+        )
+        self.reranker = FlagReranker(
+            rerank_path, 
+            use_fp16=True, 
+            device=self.device
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(token_path)
+        self.vector_store = Chroma(
+            collection_name="hf_split_parents",
+            embedding_function = self.embeddings
+        )
         self.docstore = InMemoryStore()
-        self.retriever = ParentDocumentRetriever(vectorstore = self.vector_store,
-                                                  docstore = self.docstore, 
-                                                  child_splitter=self.child_splitter, 
-                                                  parent_splitter = self.parent_splitter)
-    def clean_search_results(self, search_results):
+        self.retriever = ParentDocumentRetriever(
+            vectorstore=self.vector_store,
+            docstore=self.docstore, 
+            child_splitter=self.child_splitter, 
+            parent_splitter=self.parent_splitter,
+            search_kwargs = {'k': recall_k}
+        )
+    
+    def clean_search_results(self, search_results, max_length=12000):
         """
         search_results: List[Dict]
         """
         res = []
-        for html_page_json in search_results:
-            soup = BeautifulSoup(html_page_json["page_result"], "lxml")
-            text = soup.get_text(" ", strip=True)  # Use space as a separator, strip whitespaces
-            res.append(Document(page_content=text, metadata={}))
+        for idx, html_page_json in enumerate(search_results):
+            soup = BeautifulSoup(json.dumps(html_page_json["page_result"]), "html.parser")
+            # clean out CSS/style elements
+            for script in soup(["script", "style"]):
+                script.extract()
+            text = soup.get_text(separator=' ', strip=True).lower()
+            text = html_page_json['page_snippet'].lower() + '\n\n' + text
+            inputs = self.tokenizer.encode(
+                text, max_length=max_length, add_special_tokens=False)
+            
+            if len(inputs) == max_length:
+                text = self.tokenizer.decode(inputs)
+                print('exceed html max size')
+            
+            metadata = {}
+            metadata["start_index"] = idx
+            res.append(Document(page_content=text, metadata=metadata))
+            
         self.retriever.add_documents(res)
 
     # return list string of retrieved docs
-    def get_documents(self, query, search_results, k):
+    def get_documents(self, query, search_results, k=5):
         """
         query: string 
         search_results: List[Dict] -> list holds 5 search query results
         k: int -> gets top k results
         """
+        torch.torch.cuda.empty_cache()
         # clean out search results
-        search_results = self.clean_search_results(search_results)
+        self.clean_search_results(search_results)
         # get relevant documents based on query embeddings + parent/child embeds lez go
-        retrieved_docs = self.retriever.invoke(query)
-        if k > len(retrieved_docs):
-            k = len(retrieved_docs)
-        return [x.page_content for x in retrieved_docs[:k]]
+        retrieved_docs = self.retriever.get_relevant_documents(query)
+        
+        if retrieved_docs == []:
+            return [""]
+        elif len(retrieved_docs) <= k:
+            return [doc.page_content for doc in retrieved_docs]
+        
+        # Rerank
+        with torch.no_grad():
+            sentence_pairs = [[query, doc.page_content] for doc in retrieved_docs]
+            sim = self.reranker.compute_score(
+                sentence_pairs, 
+                normalize=True, 
+                batch_size=16)
+            indexs = torch.topk(
+                torch.tensor(sim), min(k, len(retrieved_docs))).indices
+            del sim
+            torch.torch.cuda.empty_cache()
+            docs = [retrieved_docs[idx].page_content for idx in indexs]
+        
+        return docs 
     
 
 class RAGModel:
@@ -92,9 +153,11 @@ class RAGModel:
     An example RAGModel for the KDDCup 2024 Meta CRAG Challenge
     which includes all the key components of a RAG lifecycle.
     """
-    def __init__(self, llm_name="meta-llama/Llama-3.2-3B-Instruct", is_server=False, vllm_server=None, k=4):
+    def __init__(self, llm_name="meta-llama/Llama-3.2-3B-Instruct", is_server=False, vllm_server=None, k=5):
         self.initialize_models(llm_name, is_server, vllm_server)
-        self.retriever = Retriever()
+        self.retriever = Retriever(
+            token_path=llm_name
+        )
         self.k = k
 
     def initialize_models(self, llm_name, is_server, vllm_server):
@@ -122,95 +185,6 @@ class RAGModel:
                 enforce_eager=True
             )
             self.tokenizer = self.llm.get_tokenizer()
-
-        # Load a sentence transformer model optimized for sentence embeddings, using CUDA if available.
-        self.sentence_model = SentenceTransformer(
-            "BAAI/bge-base-en-v1.5",
-            device=torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu"
-            ),
-        )
-
-    def calculate_embeddings(self, sentences):
-        """
-        Compute normalized embeddings for a list of sentences using a sentence encoding model.
-
-        This function leverages multiprocessing to encode the sentences, which can enhance the
-        processing speed on multi-core machines.
-
-        Args:
-            sentences (List[str]): A list of sentences for which embeddings are to be computed.
-
-        Returns:
-            np.ndarray: An array of normalized embeddings for the given sentences.
-
-        """
-        embeddings = self.sentence_model.encode(
-            sentences=sentences,
-            normalize_embeddings=True,
-            batch_size=SENTENTENCE_TRANSFORMER_BATCH_SIZE,
-        )
-        # Note: There is an opportunity to parallelize the embedding generation across 4 GPUs
-        #       but sentence_model.encode_multi_process seems to interefere with Ray
-        #       on the evaluation servers. 
-        #       todo: this can also be done in a Ray native approach.
-        #       
-        return embeddings
-    
-    def llama3_domain(self, query):
-        messages = [
-            {"role": "system", "content": f"You are an assistant expert in movie, sports, finance and music fields."},
-            {"role": "user",
-             "content": "Please judge which category the query belongs to, without answering the query. you can only and must output one word in (movie, sports, finance, music) If the question doesn't belong to movie, sports,finance, music, please answer other. \n Query:" + query + '\n Category:'},
-        ]
-        domain, _, _ = self.llam3_output(messages, maxtoken=3, disable_adapter=True)
-        for key in ['finance', 'music', 'sports', 'movie']:
-            if key in domain:
-                return key
-        return 'open'
-    
-    def llam3_output(self, messages, maxtoken=75, disable_adapter=False):
-        self.m.eval()
-        if time.time() - self.all_st >= self.all_time:
-            return "i don't know", 0, 0
-        with torch.no_grad():
-            t1 = time.time()
-            input_ids = self.tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                return_tensors="pt"
-            ).to(self.m.device)
-            print('input_ids shape', input_ids.shape)
-            terminators = [
-                self.tokenizer.eos_token_id,
-                self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-            ]
-
-            generation_config = GenerationConfig(
-                max_new_tokens=maxtoken, do_sample=False,
-                max_time=32 - (time.time() - self.t_s), eos_token_id=terminators)
-            if disable_adapter:
-                with self.m.disable_adapter():
-                    outputs = self.m.generate(
-                        input_ids=input_ids,
-                        generation_config=generation_config,
-                        eos_token_id=terminators,
-                        return_dict_in_generate=True,
-                        output_scores=False)
-            else:
-                outputs = self.m.generate(
-                    input_ids=input_ids,
-                    generation_config=generation_config,
-                    eos_token_id=terminators,
-                    return_dict_in_generate=True,
-                    output_scores=False)
-
-            output = self.tokenizer.decode(outputs.sequences[0], skip_special_tokens=True).lower().split("assistant")[
-                -1].strip()
-            print("end gen:", time.time() - t1)
-            print("output:")
-            print(output)
-        return output, 0, 0
 
     def get_batch_size(self) -> int:
         """
