@@ -94,7 +94,6 @@ if __name__ == "__main__":
                         choices=["vanilla_baseline",
                                  "rag_baseline",
                                  # add your model here
-                                 "my_model",
                                  "my_model_v1",
                                  "my_model_v2",
                                  "my_model_v3",
@@ -132,9 +131,6 @@ if __name__ == "__main__":
         model = InstructModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
     elif model_name == "rag_baseline":
         from rag_baseline import RAGModel
-        model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
-    elif model_name == "my_model":
-        from my_model import RAGModel
         model = RAGModel(llm_name=llm_name, is_server=args.is_server, vllm_server=args.vllm_server)
     elif model_name == "my_model_v1":
         from my_model_v1 import RAGModel

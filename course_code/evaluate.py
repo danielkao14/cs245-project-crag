@@ -1,15 +1,10 @@
-import bz2
 import json
 import os
-from datetime import datetime
 import argparse
 
 from loguru import logger
 from tqdm.auto import tqdm
-
 import vllm
-from openai import OpenAI
-
 
 
 def parse_response(resp: str):
@@ -80,7 +75,6 @@ if __name__ == "__main__":
                         choices=["vanilla_baseline",
                                  "rag_baseline",
                                  # add your model here
-                                 "my_model",
                                  "my_model_v1",
                                  "my_model_v2",
                                  "my_model_v3",

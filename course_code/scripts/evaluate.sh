@@ -2,7 +2,7 @@
 mkdir -p log
 TIME=$(date +"%Y-%m-%d_%H-%M-%S")
 MODEL_NAME=my_model_v3
-K=15
+K=5
 EVAL_LLM=meta-llama/Llama-3.2-3B-Instruct
 LLM_NAME=pretrain_models/merged_checkpoint-480
 CUDA_VISIBLE_DEVICES=0 python evaluate.py \

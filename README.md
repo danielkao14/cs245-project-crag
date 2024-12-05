@@ -46,7 +46,7 @@ cd course_code
 ./scripts/generate.sh
 ```
 
-- `MODEL_NAME`: method name, choices = [`vanilla_baseline`, `rag_baseline`, `my_model`, `my_model_v2`, `my_model_v3`]. The final method is `my_model_v3`
+- `MODEL_NAME`: method name, choices = [`vanilla_baseline`, `rag_baseline`, `my_model_v1`, `my_model_v2`, `my_model_v3`]. The final method is `my_model_v3`
 - `LLM_NAME`: model path, either provide a valid HuggingFace model or a local model path. For the de-hallucinated model, use `pretrain_models/merged_checkpoint-480`.
 - `K`: number of retrieved chunks for Parent-Child Chunk retriever.
 
@@ -56,7 +56,7 @@ cd course_code
 ./scripts/evaluate.sh
 ```
 
-- `MODEL_NAME`: method name, choices = [`vanilla_baseline`, `rag_baseline`, `my_model`, `my_model_v2`, `my_model_v3`]. The final method is `my_model_v3`
+- `MODEL_NAME`: method name, choices = [`vanilla_baseline`, `rag_baseline`, `my_model_v1`, `my_model_v2`, `my_model_v3`]. The final method is `my_model_v3`
 - `EVAL_LLM`: evaluation model path, either provide a valid HuggingFace model or a local model path. Note that we fixed it to `meta-llama/Llama-3.2-3B-Instruct` for a fair comparison.
 - `LLM_NAME`: generation model path, either provide a valid HuggingFace model or a local model path. For the de-hallucinated model, use `pretrain_models/merged_checkpoint-480`.
 - `K`: number of retrieved chunks for Parent-Child Chunk retriever.
