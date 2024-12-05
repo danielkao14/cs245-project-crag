@@ -3,7 +3,7 @@ mkdir -p log
 TIME=$(date +"%Y-%m-%d_%H-%M-%S")
 MODEL_NAME=my_model_v3
 K=15
-LLM_NAME=pretrain_models/llama3-52-peft/merged_checkpoint-480
+LLM_NAME=pretrain_models/merged_checkpoint-480
 CUDA_VISIBLE_DEVICES=0 python generate.py \
     --dataset_path "data/crag_task_1_dev_v4_release.jsonl.bz2" \
     --split 1 \

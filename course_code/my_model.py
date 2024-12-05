@@ -9,17 +9,9 @@ import vllm
 from blingfire import text_to_sentences_and_offsets
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
-
 from openai import OpenAI
-
 from tqdm import tqdm
 
-from langchain.retrievers import ParentDocumentRetriever
-from langchain.storage import InMemoryStore
-from langchain_chroma import Chroma
-from langchain_community.document_loaders import TextLoader
-from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 #### CONFIG PARAMETERS ---
 
@@ -70,52 +62,6 @@ class ChunkExtractor:
 
         # Extract offsets of sentences from the text
         _, offsets = text_to_sentences_and_offsets(text)
-
-        # Initialize a list to store sentences
-        chunks = []
-
-        # Iterate through the list of offsets and extract sentences
-        for start, end in offsets:
-            # Extract the sentence and limit its length
-            sentence = text[start:end][:MAX_CONTEXT_SENTENCE_LENGTH]
-            chunks.append(sentence)
-
-        return interaction_id, chunks
-    
-    @ray.remote
-    def _parent_child_chunks(self, interaction_id, html_source):
-        """
-        Parent-Child Chunk Retriever
-
-        Parameters:
-            interaction_id (str): Interaction ID that this HTML source belongs to.
-            html_source (str): HTML content from which to extract text.
-
-        Returns:
-            Tuple[str, List[str]]: A tuple containing the interaction ID and a list of sentences extracted from the HTML content.
-        """
-        # Parse the HTML content using BeautifulSoup
-        soup = BeautifulSoup(html_source, "lxml")
-        text = soup.get_text(" ", strip=True)  # Use space as a separator, strip whitespaces
-
-        if not text:
-            # Return a list with empty string when no text is extracted
-            return interaction_id, [""]
-
-        # This text splitter is used to create the child documents
-        child_splitter = RecursiveCharacterTextSplitter(chunk_size=200)
-        # The vectorstore to use to index the child chunks
-        vectorstore = Chroma(
-            collection_name="full_documents", embedding_function=OpenAIEmbeddings()
-        )
-        # The storage layer for the parent documents
-        store = InMemoryStore()
-        retriever = ParentDocumentRetriever(
-            vectorstore=vectorstore,
-            docstore=store,
-            child_splitter=child_splitter,
-        )
-        retriever.add_documents(text, ids=None)
 
         # Initialize a list to store sentences
         chunks = []

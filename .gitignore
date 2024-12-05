@@ -4,7 +4,7 @@ api_responses
 data
 course_code/log
 course_code/pretrain_models
-# course_code/processed_data
+course_code/processed_data
 test.ipynb
 
 # Python

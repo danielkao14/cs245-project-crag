@@ -1,124 +1,62 @@
-![banner image](https://aicrowd-production.s3.eu-central-1.amazonaws.com/challenge_images/meta-kdd-cup-24/meta_kdd_cup_24_banner.jpg)
-[![Discord](https://img.shields.io/discord/565639094860775436.svg)](https://discord.gg/yWurtB2huX)
-
-# Meta KDD Cup '24 [CRAG: Comprehensive RAG Benchmark](https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024) Starter Kit
-
-
-This repository is the CRAG: Comphrensive RAG Benchmark **Submission template and Starter kit**! Clone the repository to compete now!
-
-**This repository contains**:
-*  **Documentation** on how to submit your models to the leaderboard
-*  **The procedure** for best practices and information on how we evaluate your model, etc.
-*  **Starter code** for you to get started!
+# CS 245 Final Project Group 1
 
 # Table of Contents
 
-1. [Competition Overview](#-competition-overview)
-2. [Dataset](#-dataset)
-3. [Tasks](#-tasks)
-4. [Evaluation Metrics](#-evaluation-metrics)
-5. [Getting Started](#-getting-started)
-   - [How to write your own model?](#️-how-to-write-your-own-model)
-   - [How to start participating?](#-how-to-start-participating)
-      - [Setup](#setup)
-      - [How to make a submission?](#-how-to-make-a-submission)
-      - [What hardware does my code run on?](#-what-hardware-does-my-code-run-on-)
-      - [How are my model responses parsed by the evaluators?](#-how-are-my-model-responses-parsed-by-the-evaluators-)
-      - [Baselines](#baselines)
-6. [Frequently Asked Questions](#-frequently-asked-questions)
-6. [Important Links](#-important-links)
+1. [Environment Setup](#environment-setup)
+2. [Download Dataset](#download-dataset)
+3. [Download dehallucinated model weight](#download-dehallucinated-model-weight)
+4. [Reproducing results](#reproducing-results)
 
+# Environment Setup
 
-# 📖 Competition Overview
+We used `conda` to set up our environment.
+```bash
+conda create -n crag python==3.11
+conda activate crag
+pip install -r requirements.txt
+```
 
+# Download Dataset
+Download the dataset for Task #1 at the following [link](https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024/problems/retrieval-summarization/dataset_files). Your `data` folder should look like this.
 
-# 📊 Dataset
+```
+data
+├── crag_task_1_dev_v4_release.jsonl.bz2
+```
 
-Please find more details about the dataset in [docs/dataset.md](docs/dataset.md).
+# Download Dehallucinated Model Weight
 
-# 👨‍💻👩‍💻 Tasks  
+We used the fine-tuned model weight at the following [link](https://gitlab.aicrowd.com/jiazunchen/kdd2024cup-crag-db3/-/tree/main/models/pretrain_models/llama3-52-peft/checkpoint-480) but merged the LoRA adapter to the base model so that we could run vLLM inference more easily. 
 
+```bash
+cd course_code
+mkdir pretrain_models
+cd pretrain_models
+pip install gdown
+gdown 1aiGNzXmx18D5u3Nog3Ef4TflHJBsDBQI
+```
 
-## 📏 Evaluation Metrics
+If `gdown` doesn't work, consider downloading directly at the following GDrive [link](https://drive.google.com/file/d/1aiGNzXmx18D5u3Nog3Ef4TflHJBsDBQI/view?usp=sharing).
 
+# Reproducing Results
 
-Please refer to [local_evaluation.py](local_evaluation.py) for more details on how we will evaluate your submissions.
+## Generation
+```bash
+cd course_code
+./scripts/generate.sh
+```
 
-# 🏁 Getting Started
-1. **Sign up** to join the competition [on the AIcrowd website](https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024).
-2. **Fork** this starter kit repository. You can use [this link](https://gitlab.aicrowd.com/aicrowd/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024/meta-comphrehensive-rag-benchmark-starter-kit/-/forks/new) to create a fork.
-3. **Clone** your forked repo and start developing your model.
-4. **Develop** your model(s) following the template in [how to write your own model](#how-to-write-your-own-model) section.
-5. [**Submit**](#-how-to-make-a-submission) your trained models to [AIcrowd Gitlab](https://gitlab.aicrowd.com) for evaluation [(full instructions below)](#-how-to-make-a-submission). The automated evaluation will evaluate the submissions on the public test set and report the metrics on the leaderboard of the competition.
+- `MODEL_NAME`: method name, choices = [`vanilla_baseline`, `rag_baseline`, `my_model`, `my_model_v2`, `my_model_v3`]. The final method is `my_model_v3`
+- `LLM_NAME`: model path, either provide a valid HuggingFace model or a local model path. For the de-hallucinated model, use `pretrain_models/merged_checkpoint-480`.
+- `K`: number of retrieved chunks for Parent-Child Chunk retriever.
 
-# ✍️ How to write your own model?
+## Evaluation
+```bash
+cd course_code
+./scripts/evaluate.sh
+```
 
-Please follow the instructions in [models/README.md](models/README.md) for instructions and examples on how to write your own models for this competition.
-
-# 🚴 How to start participating?
-
-## Setup
-
-1. **Add your SSH key** to AIcrowd GitLab
-
-You can add your SSH Keys to your GitLab account by going to your profile settings [here](https://gitlab.aicrowd.com/-/profile/keys). If you do not have SSH Keys, you will first need to [generate one](https://docs.gitlab.com/ee/user/ssh.html).
-
-
-2. **Fork the repository**. You can use [this link](https://gitlab.aicrowd.com/aicrowd/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024/meta-comphrehensive-rag-benchmark-starter-kit/-/forks/new) to create a fork.
-
-3.  **Clone the repository**
-
-    ```bash
-    git clone git@gitlab.aicrowd.com:<YOUR-AICROWD-USERNAME>/meta-comphrehensive-rag-benchmark-starter-kit.git
-    cd meta-comphrehensive-rag-benchmark-starter-kit
-    ```
-
-4. **Install** competition specific dependencies!
-    ```bash
-    cd meta-comphrehensive-rag-benchmark-starter-kit
-    pip install -r requirements.txt
-    ```
-
-5. Write your own model as described in [How to write your own model](#how-to-write-your-own-model) section.
-
-6. Test your model locally using `python local_evaluation.py`.
-
-7. Accept the Challenge Rules on the main [challenge page](https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024) by clicking on the **Participate** button. Also accept the Challenge Rules on the Task specific page (link on the challenge page) that you want to submit to.
-
-8. Make a submission as described in [How to make a submission](#-how-to-make-a-submission) section.
-
-# ✍️ How to write your own model?
-
-Please follow the instructions in [models/README.md](models/README.md) for instructions and examples on how to write your own models for this competition.
-
-
-## 📮 How to make a submission?
-
-Please follow the instructions in [docs/submission.md](docs/submission.md) to make your first submission. 
-This also includes instructions on [specifying your software runtime](docs/submission.md#specifying-software-runtime-and-dependencies), [code structure](docs/submission.md#code-structure-guidelines), [submitting to different tracks](docs/submission.md#submitting-to-different-tracks).
-
-**Note**: **Remember to accept the Challenge Rules** on the challenge page, **and** the task page before making your first submission.
-
-## 💻 What hardware does my code run on ?
-You can find more details about the hardware and system configuration in [docs/hardware-and-system-config.md](docs/hardware-and-system-config.md).
-In summary, we provide you `4` x [[NVIDIA T4 GPUs](https://www.nvidia.com/en-us/data-center/tesla-t4/)].
-
-## 🏁 Baseline
-We include three baselines for demonstration purposes, and you can read more abou them in [docs/baselines.md](docs/baselines.md).
-
-# ❓ Frequently Asked Questions
-## Which track is this starter kit for ?
-This starter kit can be used to submit to any of the tracks. You can find more information in [docs/submission.md#submitting-to-different-tracks](docs/submission.md#submitting-to-different-tracks).
-
-## Where can I know more about the dataset schema ?
-The dataset schema is described in [docs/dataset.md](docs/dataset.md).
-
-If you want to use Croissant to view the data, please use [docs/croissant.json](docs/croissant.json).
-
-**Best of Luck** :tada: :tada:
-
-# 📎 Important links
-
-- 💪 Challenge Page: https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024
-- 🗣 Discussion Forum: https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024/discussion
-- 🏆 Leaderboard: https://www.aicrowd.com/challenges/meta-comprehensive-rag-benchmark-kdd-cup-2024/leaderboards
+- `MODEL_NAME`: method name, choices = [`vanilla_baseline`, `rag_baseline`, `my_model`, `my_model_v2`, `my_model_v3`]. The final method is `my_model_v3`
+- `EVAL_LLM`: evaluation model path, either provide a valid HuggingFace model or a local model path. Note that we fixed it to `meta-llama/Llama-3.2-3B-Instruct` for a fair comparison.
+- `LLM_NAME`: generation model path, either provide a valid HuggingFace model or a local model path. For the de-hallucinated model, use `pretrain_models/merged_checkpoint-480`.
+- `K`: number of retrieved chunks for Parent-Child Chunk retriever.
